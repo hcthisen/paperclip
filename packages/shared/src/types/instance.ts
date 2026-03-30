@@ -1,5 +1,7 @@
 export interface InstanceGeneralSettings {
   censorUsernameInLogs: boolean;
+  domain: string | null;
+  domainConfiguredAt: string | null;
 }
 
 export interface InstanceExperimentalSettings {

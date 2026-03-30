@@ -1,0 +1,50 @@
+# Paperclip Server - systemd service unit
+# This is a reference template. The vps-bootstrap.sh script writes a
+# customized version to /etc/systemd/system/paperclip.service.
+#
+# Manual install:
+#   cp scripts/paperclip-server.service /etc/systemd/system/paperclip.service
+#   # Edit paths and Environment lines to match your setup
+#   systemctl daemon-reload && systemctl enable --now paperclip
+
+[Unit]
+Description=Paperclip Server
+After=network.target
+
+[Service]
+Type=simple
+User=paperclip
+Group=paperclip
+WorkingDirectory=/opt/paperclip
+ExecStart=/usr/bin/node --import ./server/node_modules/tsx/dist/loader.mjs server/dist/index.js
+
+# Environment
+Environment=NODE_ENV=production
+Environment=HOME=/home/paperclip
+Environment=HOST=0.0.0.0
+Environment=PORT=3100
+Environment=SERVE_UI=true
+Environment=PAPERCLIP_HOME=/home/paperclip/.paperclip
+Environment=PAPERCLIP_INSTANCE_ID=default
+Environment=PAPERCLIP_CONFIG=/home/paperclip/.paperclip/instances/default/config.json
+Environment=PAPERCLIP_DEPLOYMENT_MODE=authenticated
+Environment=PAPERCLIP_DEPLOYMENT_EXPOSURE=public
+Environment=PAPERCLIP_MIGRATION_AUTO_APPLY=true
+
+# Secrets (edit path if your instance directory differs)
+EnvironmentFile=/home/paperclip/.paperclip/instances/default/.env
+
+# Process management
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=paperclip
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/paperclip/.paperclip /opt/paperclip
+
+[Install]
+WantedBy=multi-user.target

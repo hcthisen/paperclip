@@ -42,6 +42,8 @@ import { BoardClaimPage } from "./pages/BoardClaim";
 import { CliAuthPage } from "./pages/CliAuth";
 import { InviteLandingPage } from "./pages/InviteLanding";
 import { NotFoundPage } from "./pages/NotFound";
+import { VpsAdminSetupPage } from "./pages/VpsAdminSetup";
+import { VpsDomainSetupPage } from "./pages/VpsDomainSetup";
 import { queryKeys } from "./lib/queryKeys";
 import { useCompany } from "./context/CompanyContext";
 import { useDialog } from "./context/DialogContext";
@@ -104,12 +106,26 @@ function CloudAccessGate() {
   }
 
   if (isAuthenticatedMode && healthQuery.data?.bootstrapStatus === "bootstrap_pending") {
+    // In public (VPS) mode, redirect to the direct admin setup page
+    if (healthQuery.data?.deploymentExposure === "public") {
+      return <Navigate to="/setup/admin" replace />;
+    }
     return <BootstrapPendingPage hasActiveInvite={healthQuery.data.bootstrapInviteActive} />;
   }
 
   if (isAuthenticatedMode && !sessionQuery.data) {
     const next = encodeURIComponent(`${location.pathname}${location.search}`);
     return <Navigate to={`/auth?next=${next}`} replace />;
+  }
+
+  // In public (VPS) mode, redirect to domain setup if not yet configured
+  if (
+    isAuthenticatedMode &&
+    healthQuery.data?.deploymentExposure === "public" &&
+    healthQuery.data?.setupPhase === "domain_setup" &&
+    sessionQuery.data
+  ) {
+    return <Navigate to="/setup/domain" replace />;
   }
 
   return <Outlet />;
@@ -306,6 +322,8 @@ export function App() {
         <Route path="board-claim/:token" element={<BoardClaimPage />} />
         <Route path="cli-auth/:id" element={<CliAuthPage />} />
         <Route path="invite/:token" element={<InviteLandingPage />} />
+        <Route path="setup/admin" element={<VpsAdminSetupPage />} />
+        <Route path="setup/domain" element={<VpsDomainSetupPage />} />
 
         <Route element={<CloudAccessGate />}>
           <Route index element={<CompanyRootRedirect />} />

@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const instanceGeneralSettingsSchema = z.object({
   censorUsernameInLogs: z.boolean().default(false),
+  domain: z.string().nullable().default(null),
+  domainConfiguredAt: z.string().nullable().default(null),
 }).strict();
 
 export const patchInstanceGeneralSettingsSchema = instanceGeneralSettingsSchema.partial();

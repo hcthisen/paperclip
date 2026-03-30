@@ -18,10 +18,14 @@ function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
   if (parsed.success) {
     return {
       censorUsernameInLogs: parsed.data.censorUsernameInLogs ?? false,
+      domain: parsed.data.domain ?? null,
+      domainConfiguredAt: parsed.data.domainConfiguredAt ?? null,
     };
   }
   return {
     censorUsernameInLogs: false,
+    domain: null,
+    domainConfiguredAt: null,
   };
 }
 

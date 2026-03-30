@@ -258,6 +258,41 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     }
   }
 
+  type DeploymentTarget = "local" | "vps";
+  let deploymentTarget: DeploymentTarget = "local";
+
+  if (opts.yes) {
+    // Auto-detect VPS mode from environment
+    if (
+      process.env.PAPERCLIP_DEPLOYMENT_MODE === "authenticated" &&
+      process.env.PAPERCLIP_DEPLOYMENT_EXPOSURE === "public"
+    ) {
+      deploymentTarget = "vps";
+    }
+  } else {
+    const targetChoice = await p.select({
+      message: "Where are you deploying Paperclip?",
+      options: [
+        {
+          value: "local" as const,
+          label: "Local machine",
+          hint: "Development laptop/desktop (default)",
+        },
+        {
+          value: "vps" as const,
+          label: "VPS / Cloud server",
+          hint: "Internet-facing server with authentication + HTTPS",
+        },
+      ],
+      initialValue: "local",
+    });
+    if (p.isCancel(targetChoice)) {
+      p.cancel("Setup cancelled.");
+      return;
+    }
+    deploymentTarget = targetChoice as DeploymentTarget;
+  }
+
   let setupMode: SetupMode = "quickstart";
   if (opts.yes) {
     p.log.message(pc.dim("`--yes` enabled: using Quickstart defaults."));
@@ -295,6 +330,46 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     storage,
     secrets,
   } = derivedDefaults;
+
+  // Apply VPS overrides
+  if (deploymentTarget === "vps") {
+    server = {
+      ...server,
+      deploymentMode: "authenticated",
+      exposure: "public",
+      host: "0.0.0.0",
+    };
+
+    let publicUrl = process.env.PAPERCLIP_PUBLIC_URL?.trim() || auth.publicBaseUrl;
+    if (!publicUrl && !opts.yes) {
+      const urlInput = await p.text({
+        message: "Public base URL (e.g., http://YOUR_VPS_IP:3100 or https://your-domain.com)",
+        placeholder: "http://123.45.67.89:3100",
+        validate: (val) => {
+          if (!val.trim()) return "Public base URL is required for VPS deployment";
+          try { new URL(val.trim()); } catch { return "Enter a valid URL"; }
+        },
+      });
+      if (p.isCancel(urlInput)) {
+        p.cancel("Setup cancelled.");
+        return;
+      }
+      publicUrl = (urlInput as string).trim().replace(/\/+$/, "");
+    }
+
+    if (publicUrl) {
+      auth = {
+        ...auth,
+        baseUrlMode: "explicit",
+        disableSignUp: false,
+        publicBaseUrl: publicUrl,
+      };
+    }
+
+    p.log.success(
+      `VPS mode: authenticated + public, host=0.0.0.0, publicUrl=${publicUrl ?? "(from env)"}`,
+    );
+  }
 
   if (setupMode === "advanced") {
     p.log.step(pc.bold("Database"));

@@ -31,6 +31,7 @@ export function healthRoutes(
 
     let bootstrapStatus: "ready" | "bootstrap_pending" = "ready";
     let bootstrapInviteActive = false;
+    let setupPhase: "admin_required" | "domain_setup" | "complete" = "complete";
     if (opts.deploymentMode === "authenticated") {
       const roleCount = await db
         .select({ count: count() })
@@ -40,6 +41,7 @@ export function healthRoutes(
       bootstrapStatus = roleCount > 0 ? "ready" : "bootstrap_pending";
 
       if (bootstrapStatus === "bootstrap_pending") {
+        setupPhase = "admin_required";
         const now = new Date();
         const inviteCount = await db
           .select({ count: count() })
@@ -54,6 +56,10 @@ export function healthRoutes(
           )
           .then((rows) => Number(rows[0]?.count ?? 0));
         bootstrapInviteActive = inviteCount > 0;
+      } else if (opts.deploymentExposure === "public") {
+        const settings = instanceSettingsService(db);
+        const general = await settings.getGeneral();
+        setupPhase = general.domain ? "complete" : "domain_setup";
       }
     }
 
@@ -82,6 +88,7 @@ export function healthRoutes(
       authReady: opts.authReady,
       bootstrapStatus,
       bootstrapInviteActive,
+      setupPhase,
       features: {
         companyDeletionEnabled: opts.companyDeletionEnabled,
       },
