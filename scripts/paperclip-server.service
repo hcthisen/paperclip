@@ -21,6 +21,7 @@ ExecStart=/usr/bin/node --import ./server/node_modules/tsx/dist/loader.mjs serve
 # Environment
 Environment=NODE_ENV=production
 Environment=HOME=/home/paperclip
+Environment=PATH=/home/paperclip/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HOST=0.0.0.0
 Environment=PORT=3100
 Environment=SERVE_UI=true

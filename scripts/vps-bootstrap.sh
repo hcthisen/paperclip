@@ -351,6 +351,7 @@ ExecStart=/usr/bin/node --import ./server/node_modules/tsx/dist/loader.mjs serve
 # Environment
 Environment=NODE_ENV=production
 Environment=HOME=${PAPERCLIP_HOME}
+Environment=PATH=${PAPERCLIP_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HOST=0.0.0.0
 Environment=PORT=${PAPERCLIP_PORT}
 Environment=SERVE_UI=true
