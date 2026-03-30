@@ -185,6 +185,22 @@ ${domain} {
       logger.warn({ err, domain }, "Failed to start Caddy via systemctl. You may need to start it manually: sudo systemctl enable --now caddy");
     }
 
+    // Update the Paperclip config file to use the new domain as publicBaseUrl
+    try {
+      const fsPromises = await import("node:fs/promises");
+      const configPath = process.env.PAPERCLIP_CONFIG
+        || `${process.env.PAPERCLIP_HOME || process.env.HOME + "/.paperclip"}/instances/default/config.json`;
+      const raw = await fsPromises.readFile(configPath, "utf-8");
+      const config = JSON.parse(raw);
+      if (config.auth) {
+        config.auth.publicBaseUrl = `https://${domain}`;
+      }
+      await fsPromises.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
+      logger.info({ domain }, "Updated config publicBaseUrl");
+    } catch (err) {
+      logger.warn({ err, domain }, "Could not update config file publicBaseUrl. A restart with updated PAPERCLIP_PUBLIC_URL may be needed.");
+    }
+
     // Save domain to instance settings
     await settings.updateGeneral({
       domain,
