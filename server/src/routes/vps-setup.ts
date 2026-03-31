@@ -261,6 +261,58 @@ ${domain} {
     });
   });
 
+  // GET /vps/domain-readiness?domain=example.com
+  // Checks whether the HTTPS endpoint for the configured domain is serving
+  // Paperclip successfully before the UI redirects the browser.
+  router.get("/vps/domain-readiness", async (req, res) => {
+    if (req.actor.type !== "board" || !req.actor.isInstanceAdmin) {
+      throw forbidden("Instance admin required");
+    }
+
+    const domain = typeof req.query.domain === "string" ? req.query.domain.trim() : "";
+    if (!domain) throw badRequest("domain is required");
+
+    const url = `https://${domain}/api/health?ts=${Date.now()}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Cache-Control": "no-cache",
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+
+      let ready = false;
+      let status: string | undefined;
+
+      if (response.ok) {
+        try {
+          const payload = await response.json() as { status?: string };
+          status = payload.status;
+          ready = payload.status === "ok";
+        } catch {
+          ready = false;
+        }
+      }
+
+      res.json({
+        ready,
+        url,
+        statusCode: response.status,
+        status,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Domain is not ready yet";
+      res.json({
+        ready: false,
+        url,
+        error: message,
+      });
+    }
+  });
+
   // POST /vps/skip-domain
   // Marks domain setup as complete without configuring a domain.
   router.post("/vps/skip-domain", async (req, res) => {

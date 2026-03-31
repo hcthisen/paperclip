@@ -59,6 +59,7 @@ function createApp(actor: any, adminCount = 0) {
 describe("vps setup routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     mockAccessService.promoteInstanceAdmin.mockResolvedValue(undefined);
     mockInstanceSettingsService.updateGeneral.mockResolvedValue({
       id: "instance-settings-1",
@@ -130,5 +131,56 @@ describe("vps setup routes", () => {
     expect(res.status).toBe(403);
     expect(mockAccessService.promoteInstanceAdmin).not.toHaveBeenCalled();
     expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
+  it("reports domain readiness once the HTTPS health check succeeds", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ status: "ok" }),
+    }));
+
+    const app = createApp({
+      type: "board",
+      userId: "user-1",
+      source: "session",
+      isInstanceAdmin: true,
+      companyIds: ["company-1"],
+    });
+
+    const res = await request(app).get("/api/vps/domain-readiness").query({ domain: "dashboard.example.com" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      ready: true,
+      status: "ok",
+      statusCode: 200,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/dashboard\.example\.com\/api\/health\?ts=/),
+      expect.objectContaining({
+        method: "GET",
+      }),
+    );
+  });
+
+  it("keeps domain readiness false while HTTPS is still unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("fetch failed")));
+
+    const app = createApp({
+      type: "board",
+      userId: "user-1",
+      source: "session",
+      isInstanceAdmin: true,
+      companyIds: ["company-1"],
+    });
+
+    const res = await request(app).get("/api/vps/domain-readiness").query({ domain: "dashboard.example.com" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      ready: false,
+      error: "fetch failed",
+    });
   });
 });

@@ -45,6 +45,11 @@ export const vpsApi = {
   configureDomain: (domain: string) =>
     vpsPost<{ ok: boolean; domain: string; url: string; nextUrl: string; restartScheduled: boolean }>("/configure-domain", { domain }),
 
+  getDomainReadiness: (domain: string) =>
+    vpsGet<{ ready: boolean; url: string; statusCode?: number; status?: string; error?: string }>(
+      `/domain-readiness?domain=${encodeURIComponent(domain)}`,
+    ),
+
   skipDomain: () =>
     vpsPost<{ ok: boolean }>("/skip-domain"),
 };

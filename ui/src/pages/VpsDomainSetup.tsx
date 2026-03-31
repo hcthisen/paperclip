@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@/lib/router";
 import { vpsApi } from "../api/vps";
@@ -7,11 +7,23 @@ import { Button } from "@/components/ui/button";
 import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
 import { Globe, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
+type DomainTransitionState = {
+  domain: string;
+  nextUrl: string;
+  restartScheduled: boolean;
+  startedAt: number;
+  checks: number;
+  lastStatusCode?: number;
+  lastError?: string;
+  ready: boolean;
+};
+
 export function VpsDomainSetupPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [domain, setDomain] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [transition, setTransition] = useState<DomainTransitionState | null>(null);
 
   const networkQuery = useQuery({
     queryKey: ["vps", "network-info"],
@@ -33,10 +45,14 @@ export function VpsDomainSetupPage() {
     onSuccess: async (data) => {
       setError(null);
       await queryClient.invalidateQueries({ queryKey: queryKeys.health });
-      const delayMs = data.restartScheduled ? 4000 : 0;
-      window.setTimeout(() => {
-        window.location.href = data.nextUrl;
-      }, delayMs);
+      setTransition({
+        domain: data.domain,
+        nextUrl: data.nextUrl,
+        restartScheduled: data.restartScheduled,
+        startedAt: Date.now(),
+        checks: 0,
+        ready: false,
+      });
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : "Domain configuration failed");
@@ -56,7 +72,137 @@ export function VpsDomainSetupPage() {
 
   const dnsResult = verifyMutation.data;
   const canConfigure = dnsResult?.matches === true;
-  const isWorking = verifyMutation.isPending || configureMutation.isPending || skipMutation.isPending;
+  const isWorking = verifyMutation.isPending || configureMutation.isPending || skipMutation.isPending || transition !== null;
+
+  useEffect(() => {
+    if (!transition) return;
+
+    let cancelled = false;
+    let timeoutId: number | undefined;
+    const { domain: activeDomain, nextUrl, restartScheduled } = transition;
+
+    const poll = async () => {
+      try {
+        const readiness = await vpsApi.getDomainReadiness(activeDomain);
+        if (cancelled) return;
+
+        if (readiness.ready) {
+          setTransition((current) => current ? {
+            ...current,
+            checks: current.checks + 1,
+            ready: true,
+          } : current);
+          window.setTimeout(() => {
+            window.location.href = nextUrl;
+          }, 750);
+          return;
+        }
+
+        setTransition((current) => current ? {
+          ...current,
+          checks: current.checks + 1,
+          lastStatusCode: readiness.statusCode,
+          lastError: readiness.error,
+        } : current);
+      } catch (err) {
+        if (cancelled) return;
+        setTransition((current) => current ? {
+          ...current,
+          checks: current.checks + 1,
+          lastError: err instanceof Error ? err.message : "Waiting for HTTPS to finish provisioning",
+        } : current);
+      }
+
+      timeoutId = window.setTimeout(poll, 3000);
+    };
+
+    timeoutId = window.setTimeout(poll, restartScheduled ? 1500 : 0);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [transition?.domain, transition?.nextUrl, transition?.restartScheduled]);
+
+  const transitionElapsedSeconds = transition
+    ? Math.max(0, Math.floor((Date.now() - transition.startedAt) / 1000))
+    : 0;
+
+  const transitionMessage = transition?.ready
+    ? "HTTPS is ready. Redirecting you to the secure sign-in page..."
+    : transition?.lastStatusCode === 502
+      ? "The certificate or upstream server is still settling. Waiting for the secure site to become reachable..."
+      : transition?.lastError
+        ? "Paperclip is still restarting behind HTTPS. Waiting until the secure site answers successfully..."
+        : "Applying HTTPS, waiting for the certificate, and checking that the secure site is reachable...";
+
+  if (transition) {
+    const showManualLink = transitionElapsedSeconds >= 45;
+
+    return (
+      <div className="fixed inset-0 flex bg-background">
+        <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
+          <div className="w-full max-w-lg mx-auto my-auto px-8 py-12">
+            <div className="flex items-center gap-2 mb-8">
+              <Globe className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Paperclip VPS Setup</span>
+            </div>
+
+            <div className="rounded-lg border border-border bg-card p-6">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <div>
+                  <h1 className="text-xl font-semibold">Finishing HTTPS setup</h1>
+                  <p className="mt-1 text-sm text-muted-foreground">{transitionMessage}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Domain: <span className="font-medium text-foreground">{transition.domain}</span>
+                </p>
+                <p>
+                  Checks: <span className="font-medium text-foreground">{transition.checks}</span>
+                </p>
+                <p>
+                  Elapsed: <span className="font-medium text-foreground">{transitionElapsedSeconds}s</span>
+                </p>
+                {typeof transition.lastStatusCode === "number" && (
+                  <p>
+                    Last HTTPS status: <span className="font-medium text-foreground">{transition.lastStatusCode}</span>
+                  </p>
+                )}
+              </div>
+
+              {showManualLink && (
+                <div className="mt-6 rounded-md border border-border bg-muted/30 p-4 text-sm">
+                  <p className="text-muted-foreground">
+                    This can take a bit longer while DNS, TLS, and the local restart settle. Paperclip will keep checking automatically.
+                  </p>
+                  <Button
+                    type="button"
+                    className="mt-4"
+                    variant="outline"
+                    onClick={() => {
+                      window.location.href = transition.nextUrl;
+                    }}
+                  >
+                    Open Secure Site Now
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden md:block w-1/2 overflow-hidden">
+          <AsciiArtAnimation />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 flex bg-background">
