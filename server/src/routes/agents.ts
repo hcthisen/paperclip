@@ -383,6 +383,12 @@ export function agentRoutes(db: Db) {
     adapterConfig: Record<string, unknown>,
   ): Record<string, unknown> {
     const next = { ...adapterConfig };
+    if (adapterType === "claude_local" || adapterType === "opencode_local") {
+      if (typeof next.dangerouslySkipPermissions !== "boolean") {
+        next.dangerouslySkipPermissions = true;
+      }
+      return ensureGatewayDeviceKey(adapterType, next);
+    }
     if (adapterType === "codex_local") {
       if (!asNonEmptyString(next.model)) {
         next.model = DEFAULT_CODEX_LOCAL_MODEL;
@@ -1965,6 +1971,18 @@ export function agentRoutes(db: Db) {
   });
 
   router.post("/agents/:id/wakeup", validate(wakeAgentSchema), async (req, res) => {
+    const body = (req.body ?? {}) as {
+      source?: "timer" | "assignment" | "on_demand" | "automation";
+      triggerDetail?: "manual" | "ping" | "callback" | "system";
+      reason?: string | null;
+      routingMode?: "auto" | "goal_loop" | "classic";
+      issueId?: string | null;
+      goalRunId?: string | null;
+      goalRunPhase?: "direction" | "production" | "verification" | "measurement" | null;
+      idempotencyKey?: string | null;
+      forceFreshSession?: boolean;
+      payload?: Record<string, unknown> | null;
+    };
     const id = req.params.id as string;
     const agent = await svc.getById(id);
     if (!agent) {
@@ -1979,17 +1997,28 @@ export function agentRoutes(db: Db) {
     }
 
     const run = await heartbeat.wakeup(id, {
-      source: req.body.source,
-      triggerDetail: req.body.triggerDetail ?? "manual",
-      reason: req.body.reason ?? null,
-      payload: req.body.payload ?? null,
-      idempotencyKey: req.body.idempotencyKey ?? null,
+      source: body.source,
+      triggerDetail: body.triggerDetail ?? "manual",
+      reason: body.reason ?? null,
+      routingMode: body.routingMode ?? "auto",
+      payload: {
+        ...(body.payload ?? {}),
+        ...(body.issueId ? { issueId: body.issueId } : {}),
+        ...(body.goalRunId ? { goalRunId: body.goalRunId } : {}),
+        ...(body.goalRunPhase ? { goalRunPhase: body.goalRunPhase } : {}),
+        ...(body.routingMode ? { routingMode: body.routingMode } : {}),
+      },
+      idempotencyKey: body.idempotencyKey ?? null,
       requestedByActorType: req.actor.type === "agent" ? "agent" : "user",
       requestedByActorId: req.actor.type === "agent" ? req.actor.agentId ?? null : req.actor.userId ?? null,
       contextSnapshot: {
         triggeredBy: req.actor.type,
         actorId: req.actor.type === "agent" ? req.actor.agentId : req.actor.userId,
-        forceFreshSession: req.body.forceFreshSession === true,
+        ...(body.issueId ? { issueId: body.issueId } : {}),
+        ...(body.goalRunId ? { goalRunId: body.goalRunId } : {}),
+        ...(body.goalRunPhase ? { goalRunPhase: body.goalRunPhase } : {}),
+        ...(body.routingMode ? { routingMode: body.routingMode } : {}),
+        forceFreshSession: body.forceFreshSession === true,
       },
     });
 

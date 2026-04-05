@@ -36,6 +36,10 @@ vi.mock("../services/index.js", () => ({
   documentService: () => ({}),
   executionWorkspaceService: () => ({}),
   goalService: () => ({}),
+  goalLoopService: () => ({
+    validateGoalRunIssueStatusChange: vi.fn(async () => undefined),
+    syncGoalRunForIssue: vi.fn(async () => null),
+  }),
   heartbeatService: () => mockHeartbeatService,
   issueApprovalService: () => ({}),
   issueService: () => mockIssueService,

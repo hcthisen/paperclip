@@ -1,6 +1,6 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agents, approvals, companies, costEvents, issues } from "@paperclipai/db";
+import { agents, approvals, companies, costEvents, goalRuns, goals, issueWorkProducts, issues } from "@paperclipai/db";
 import { notFound } from "../errors.js";
 import { budgetService } from "./budgets.js";
 
@@ -16,23 +16,46 @@ export function dashboardService(db: Db) {
 
       if (!company) throw notFound("Company not found");
 
-      const agentRows = await db
-        .select({ status: agents.status, count: sql<number>`count(*)` })
-        .from(agents)
-        .where(eq(agents.companyId, companyId))
-        .groupBy(agents.status);
-
-      const taskRows = await db
-        .select({ status: issues.status, count: sql<number>`count(*)` })
-        .from(issues)
-        .where(eq(issues.companyId, companyId))
-        .groupBy(issues.status);
-
-      const pendingApprovals = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(approvals)
-        .where(and(eq(approvals.companyId, companyId), eq(approvals.status, "pending")))
-        .then((rows) => Number(rows[0]?.count ?? 0));
+      const [agentRows, taskRows, pendingApprovals, goalCounts, activeGoalRuns, outputCounts] = await Promise.all([
+        db
+          .select({ status: agents.status, count: sql<number>`count(*)` })
+          .from(agents)
+          .where(eq(agents.companyId, companyId))
+          .groupBy(agents.status),
+        db
+          .select({ status: issues.status, count: sql<number>`count(*)` })
+          .from(issues)
+          .where(eq(issues.companyId, companyId))
+          .groupBy(issues.status),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(approvals)
+          .where(and(eq(approvals.companyId, companyId), eq(approvals.status, "pending")))
+          .then((rows) => Number(rows[0]?.count ?? 0)),
+        db
+          .select({
+            total: sql<number>`count(*)::int`,
+            active: sql<number>`coalesce(sum(case when ${goals.status} = 'active' then 1 else 0 end), 0)::int`,
+          })
+          .from(goals)
+          .where(eq(goals.companyId, companyId))
+          .then((rows) => rows[0] ?? null),
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(goalRuns)
+          .where(and(eq(goalRuns.companyId, companyId), sql`${goalRuns.status} in ('queued', 'running', 'waiting_measurement', 'needs_human_decision')`))
+          .then((rows) => Number(rows[0]?.count ?? 0)),
+        db
+          .select({
+            outputsPendingVerification:
+              sql<number>`coalesce(sum(case when ${issueWorkProducts.outputStatus} in ('shipped_pending_verification', 'verification_failed', 'needs_human_verification') then 1 else 0 end), 0)::int`,
+            verifiedOutputs:
+              sql<number>`coalesce(sum(case when ${issueWorkProducts.outputStatus} = 'verified' then 1 else 0 end), 0)::int`,
+          })
+          .from(issueWorkProducts)
+          .where(eq(issueWorkProducts.companyId, companyId))
+          .then((rows) => rows[0] ?? null),
+      ]);
 
       const agentCounts: Record<string, number> = {
         active: 0,
@@ -81,6 +104,7 @@ export function dashboardService(db: Db) {
           ? (monthSpendCents / company.budgetMonthlyCents) * 100
           : 0;
       const budgetOverview = await budgets.overview(companyId);
+      const verifiedOutputs = Number(outputCounts?.verifiedOutputs ?? 0);
 
       return {
         companyId,
@@ -102,6 +126,14 @@ export function dashboardService(db: Db) {
           pendingApprovals: budgetOverview.pendingApprovalCount,
           pausedAgents: budgetOverview.pausedAgentCount,
           pausedProjects: budgetOverview.pausedProjectCount,
+        },
+        goals: {
+          total: Number(goalCounts?.total ?? 0),
+          active: Number(goalCounts?.active ?? 0),
+          activeRuns: activeGoalRuns,
+          outputsPendingVerification: Number(outputCounts?.outputsPendingVerification ?? 0),
+          verifiedOutputs,
+          costPerVerifiedOutputCents: verifiedOutputs > 0 ? Math.round(monthSpendCents / verifiedOutputs) : null,
         },
       };
     },

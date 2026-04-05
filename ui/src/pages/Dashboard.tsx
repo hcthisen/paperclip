@@ -3,6 +3,8 @@ import { Link } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "../api/dashboard";
 import { activityApi } from "../api/activity";
+import { goalLoopApi } from "../api/goal-loop";
+import { goalsApi } from "../api/goals";
 import { issuesApi } from "../api/issues";
 import { agentsApi } from "../api/agents";
 import { projectsApi } from "../api/projects";
@@ -13,13 +15,14 @@ import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { queryKeys } from "../lib/queryKeys";
 import { MetricCard } from "../components/MetricCard";
 import { EmptyState } from "../components/EmptyState";
+import { StatusBadge } from "../components/StatusBadge";
 import { StatusIcon } from "../components/StatusIcon";
 
 import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
 import { cn, formatCents } from "../lib/utils";
-import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle } from "lucide-react";
+import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, Target } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
@@ -55,6 +58,11 @@ export function Dashboard() {
     queryFn: () => dashboardApi.summary(selectedCompanyId!),
     enabled: !!selectedCompanyId,
   });
+  const { data: goalLoopHealth } = useQuery({
+    queryKey: queryKeys.goalLoop.health(selectedCompanyId!),
+    queryFn: () => goalLoopApi.getCompanyHealth(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
 
   const { data: activity } = useQuery({
     queryKey: queryKeys.activity(selectedCompanyId!),
@@ -71,6 +79,12 @@ export function Dashboard() {
   const { data: projects } = useQuery({
     queryKey: queryKeys.projects.list(selectedCompanyId!),
     queryFn: () => projectsApi.list(selectedCompanyId!),
+    enabled: !!selectedCompanyId,
+  });
+
+  const { data: goals } = useQuery({
+    queryKey: queryKeys.goals.list(selectedCompanyId!),
+    queryFn: () => goalsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId,
   });
 
@@ -283,6 +297,39 @@ export function Dashboard() {
             />
           </div>
 
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Target className="h-4 w-4 text-muted-foreground" />
+                Goals
+              </div>
+              <div className="mt-3 text-3xl font-semibold">{data.goals.active}</div>
+              <p className="mt-1 text-sm text-muted-foreground">{data.goals.total} total goals in this company</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <CircleDot className="h-4 w-4 text-muted-foreground" />
+                Active Goal Runs
+              </div>
+              <div className="mt-3 text-3xl font-semibold">{data.goals.activeRuns}</div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {data.goals.outputsPendingVerification} outputs waiting on verification
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                Verified Output Economics
+              </div>
+              <div className="mt-3 text-3xl font-semibold">
+                {data.goals.costPerVerifiedOutputCents != null
+                  ? formatCents(data.goals.costPerVerifiedOutputCents)
+                  : "—"}
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">{data.goals.verifiedOutputs} verified outputs recorded</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <ChartCard title="Run Activity" subtitle="Last 14 days">
               <RunActivityChart runs={runs ?? []} />
@@ -378,6 +425,99 @@ export function Dashboard() {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              Goal Loop Runtime
+            </h3>
+            <div className="border border-border overflow-hidden">
+              <div className="grid gap-px bg-border sm:grid-cols-4">
+                <div className="bg-background px-4 py-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Active runs</div>
+                  <div className="mt-1 text-lg font-semibold">{goalLoopHealth?.activeRunCount ?? 0}</div>
+                </div>
+                <div className="bg-background px-4 py-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Blocked</div>
+                  <div className="mt-1 text-lg font-semibold">{goalLoopHealth?.blockedRunCount ?? 0}</div>
+                </div>
+                <div className="bg-background px-4 py-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Needs wake</div>
+                  <div className="mt-1 text-lg font-semibold">{goalLoopHealth?.needsWakeCount ?? 0}</div>
+                </div>
+                <div className="bg-background px-4 py-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Generic runs / hr</div>
+                  <div className="mt-1 text-lg font-semibold">{goalLoopHealth?.genericHeartbeatRunsLastHour ?? 0}</div>
+                </div>
+              </div>
+              <div className="divide-y divide-border">
+                {goalLoopHealth?.runs.length ? (
+                  goalLoopHealth.runs.slice(0, 5).map((run) => (
+                    <Link
+                      key={run.goalRunId}
+                      to={`/goals/${run.goalId}`}
+                      className="block px-4 py-3 hover:bg-accent/50"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{run.goalTitle}</div>
+                          <div className="truncate text-sm text-muted-foreground">
+                            {run.currentPhase} · {run.latestIssueTitle ?? "No phase issue"} · {run.nextWakeTargetAgentId ? (agentName(run.nextWakeTargetAgentId) ?? run.nextWakeTargetAgentId) : "No wake target"}
+                          </div>
+                          {run.blockedBy ? (
+                            <div className="mt-1 truncate text-xs text-amber-700 dark:text-amber-300">{run.blockedBy}</div>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <StatusBadge status={run.status} />
+                          {run.latestIssueStatus ? <StatusBadge status={run.latestIssueStatus} /> : null}
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="px-4 py-4 text-sm text-muted-foreground">No active goal-loop runs.</div>
+                )}
+              </div>
+              {goalLoopHealth && (goalLoopHealth.orphanedRunCount > 0 || goalLoopHealth.skippedWakeupsLastHour > 0) ? (
+                <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+                  {goalLoopHealth.orphanedRunCount} orphaned runs · {goalLoopHealth.skippedWakeupsLastHour} skipped goal-loop wakeups in the last hour
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              Active Goals
+            </h3>
+            {goals && goals.length > 0 ? (
+              <div className="border border-border divide-y divide-border overflow-hidden">
+                {goals
+                  .filter((goal) => goal.status === "active")
+                  .slice(0, 8)
+                  .map((goal) => (
+                    <Link
+                      key={goal.id}
+                      to={`/goals/${goal.id}`}
+                      className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-accent/50"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{goal.title}</div>
+                        <div className="truncate text-sm text-muted-foreground">
+                          {goal.mode === "goal_loop" ? "Goal loop" : "Classic"} · {goal.level}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <StatusIcon status={goal.status} />
+                        <StatusBadge status={goal.mode ?? "classic"} />
+                      </div>
+                    </Link>
+                  ))}
+              </div>
+            ) : (
+              <div className="border border-border p-4 text-sm text-muted-foreground">No goals yet.</div>
+            )}
           </div>
 
         </>

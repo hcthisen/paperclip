@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { BILLING_TYPES } from "../constants.js";
+import { BILLING_TYPES, GOAL_RUN_PHASES } from "../constants.js";
 
 export const createCostEventSchema = z.object({
   agentId: z.string().uuid(),
   issueId: z.string().uuid().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
   goalId: z.string().uuid().optional().nullable(),
+  goalRunId: z.string().uuid().optional().nullable(),
+  goalRunPhase: z.enum(GOAL_RUN_PHASES).optional().nullable(),
   heartbeatRunId: z.string().uuid().optional().nullable(),
+  recipeVersionId: z.string().uuid().optional().nullable(),
   billingCode: z.string().optional().nullable(),
   provider: z.string().min(1),
   biller: z.string().min(1).optional(),

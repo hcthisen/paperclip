@@ -11,6 +11,20 @@ Source inputs: `GOAL.md`, `PRODUCT.md`, `SPEC.md`, `DATABASE.md`, current monore
 This document is the concrete, build-ready V1 contract.
 When there is a conflict, `SPEC-implementation.md` controls V1 behavior.
 
+## 1.1 Goal-Loop Conversion Addendum
+
+As of 2026-04-04, Paperclip is being converted into a dual-mode system:
+
+- `goal_loop` is the default execution model for new companies and onboarding flows
+- `classic` remains supported for org-chart-first execution
+
+Implementation progress for this conversion is tracked in:
+
+- `doc/plans/2026-04-04-goal-loop-system.md`
+- `doc/plans/2026-04-04-goal-loop-system/PLAN.md`
+
+`PLAN.md` is the implementation record for future agents. It must be updated after each completed, tested task before the next task begins.
+
 ## 2. V1 Outcomes
 
 Paperclip V1 must provide a full control-plane loop for autonomous agents:
@@ -43,6 +57,12 @@ These decisions close open questions from `SPEC.md` for V1.
 | Budget period | Monthly UTC calendar window |
 | Budget enforcement | Soft alerts + hard limit auto-pause |
 | Deployment modes | Canonical model is `local_trusted` + `authenticated` with `private/public` exposure policy (see `doc/DEPLOYMENT-MODES.md`) |
+| Execution models | Support both `goal_loop` and `classic`; new companies default to `goal_loop`, existing companies/goals backfill to `classic` |
+| Goal-loop success semantics | Output-producing goal-loop work requires shipped proof, verification, output-ledger record, and scoreboard update before success |
+| Goal-loop runtime | Goal runs reuse issues, heartbeats, workspaces, routines, and work products as the execution substrate |
+| Goal-loop heartbeat semantics | In `goal_loop` mode, manual/timer wakes must route to goal-bound work or return `no_actionable_goal_work`; generic employee session resume is not valid normal execution |
+| Goal-loop blocker semantics | Real external blockers move the run to `needs_human_decision`; this is an expected operational state, not silent failure |
+| Progress tracking | Goal-loop implementation progress is tracked in repo at `doc/plans/2026-04-04-goal-loop-system/PLAN.md` |
 
 ## 4. Current Baseline (Repo Snapshot)
 
@@ -59,15 +79,19 @@ V1 implementation extends this baseline into a company-centric, governance-aware
 ## 5.1 In Scope
 
 - Company lifecycle (create/list/get/update/archive)
+- Company default execution mode
 - Goal hierarchy linked to company mission
+- Goal briefs, recipes, goal runs, scoreboards, runbooks, verification runs, and resource leases
 - Agent lifecycle with org structure and adapter configuration
 - Task lifecycle with parent/child hierarchy and comments
 - Atomic task checkout and explicit task status transitions
 - Board approvals for hires and CEO strategy proposal
 - Heartbeat invocation, status tracking, and cancellation
 - Cost event ingestion and rollups (agent/task/project/company)
+- Cost reporting by goal and goal-run phase
 - Budget settings and hard-stop enforcement
 - Board web UI for dashboard, org chart, tasks, agents, approvals, costs
+- Goal-loop-first onboarding and goal-centric board UI surfaces
 - Agent-facing API contract (task read/write, heartbeat report, cost report)
 - Auditable activity log for all mutating actions
 

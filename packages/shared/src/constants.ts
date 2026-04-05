@@ -133,7 +133,13 @@ export const INBOX_MINE_ISSUE_STATUS_FILTER = INBOX_MINE_ISSUE_STATUSES.join(","
 export const ISSUE_PRIORITIES = ["critical", "high", "medium", "low"] as const;
 export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
 
-export const ISSUE_ORIGIN_KINDS = ["manual", "routine_execution"] as const;
+export const ISSUE_ORIGIN_KINDS = [
+  "manual",
+  "routine_execution",
+  "goal_run_execution",
+  "goal_run_verification",
+  "goal_run_measurement",
+] as const;
 export type IssueOriginKind = (typeof ISSUE_ORIGIN_KINDS)[number];
 
 export const GOAL_LEVELS = ["company", "team", "agent", "task"] as const;
@@ -141,6 +147,69 @@ export type GoalLevel = (typeof GOAL_LEVELS)[number];
 
 export const GOAL_STATUSES = ["planned", "active", "achieved", "cancelled"] as const;
 export type GoalStatus = (typeof GOAL_STATUSES)[number];
+
+export const GOAL_MODES = ["classic", "goal_loop"] as const;
+export type GoalMode = (typeof GOAL_MODES)[number];
+
+export const GOAL_BRIEF_STATUSES = ["draft", "ready"] as const;
+export type GoalBriefStatus = (typeof GOAL_BRIEF_STATUSES)[number];
+
+export const GOAL_RUN_PHASES = ["direction", "production", "verification", "measurement"] as const;
+export type GoalRunPhase = (typeof GOAL_RUN_PHASES)[number];
+
+export const GOAL_RUN_STATUSES = [
+  "queued",
+  "running",
+  "waiting_measurement",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "needs_human_decision",
+] as const;
+export type GoalRunStatus = (typeof GOAL_RUN_STATUSES)[number];
+
+export const RECIPE_SOURCES = ["system", "company"] as const;
+export type RecipeSource = (typeof RECIPE_SOURCES)[number];
+
+export const OUTPUT_STATUSES = [
+  "generated_not_shipped",
+  "shipped_pending_verification",
+  "verified",
+  "verification_failed",
+  "needs_human_verification",
+] as const;
+export type OutputStatus = (typeof OUTPUT_STATUSES)[number];
+
+export const GOAL_OUTPUT_TYPES = [
+  "website_page",
+  "scheduled_social_post",
+  "email",
+  "outreach_mutation",
+  "document",
+  "artifact",
+  "other",
+] as const;
+export type GoalOutputType = (typeof GOAL_OUTPUT_TYPES)[number];
+
+export const VERIFICATION_VERDICTS = [
+  "pending",
+  "passed",
+  "failed",
+  "retryable",
+  "blocked_missing_access",
+  "ambiguous_result",
+  "needs_human_decision",
+] as const;
+export type VerificationVerdict = (typeof VERIFICATION_VERDICTS)[number];
+
+export const LEASE_MODES = ["shared_read", "exclusive_write"] as const;
+export type LeaseMode = (typeof LEASE_MODES)[number];
+
+export const RESOURCE_LEASE_STATUSES = ["active", "released", "expired", "cancelled"] as const;
+export type ResourceLeaseStatus = (typeof RESOURCE_LEASE_STATUSES)[number];
+
+export const RUNBOOK_SCOPE_TYPES = ["company", "goal"] as const;
+export type RunbookScopeType = (typeof RUNBOOK_SCOPE_TYPES)[number];
 
 export const PROJECT_STATUSES = [
   "backlog",
@@ -264,7 +333,7 @@ export const FINANCE_UNITS = [
 ] as const;
 export type FinanceUnit = (typeof FINANCE_UNITS)[number];
 
-export const BUDGET_SCOPE_TYPES = ["company", "agent", "project"] as const;
+export const BUDGET_SCOPE_TYPES = ["company", "agent", "project", "goal"] as const;
 export type BudgetScopeType = (typeof BUDGET_SCOPE_TYPES)[number];
 
 export const BUDGET_METRICS = ["billed_cents"] as const;

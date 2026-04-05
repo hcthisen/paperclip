@@ -1,4 +1,4 @@
-import type { IssueOriginKind, IssuePriority, IssueStatus } from "../constants.js";
+import type { GoalMode, GoalRunPhase, IssueOriginKind, IssuePriority, IssueStatus } from "../constants.js";
 import type { Goal } from "./goal.js";
 import type { Project, ProjectWorkspace } from "./project.js";
 import type { ExecutionWorkspace, IssueExecutionWorkspaceSettings } from "./workspace-runtime.js";
@@ -20,6 +20,10 @@ export interface IssueAncestorGoal {
   description: string | null;
   level: string;
   status: string;
+  mode?: GoalMode;
+  kpiFamily?: string | null;
+  timeframe?: string | null;
+  currentStateSummary?: string | null;
 }
 
 export interface IssueAncestor {
@@ -121,6 +125,8 @@ export interface Issue {
   originKind?: IssueOriginKind;
   originId?: string | null;
   originRunId?: string | null;
+  goalRunId?: string | null;
+  goalRunPhase?: GoalRunPhase | null;
   requestDepth: number;
   billingCode: string | null;
   assigneeAdapterOverrides: IssueAssigneeAdapterOverrides | null;

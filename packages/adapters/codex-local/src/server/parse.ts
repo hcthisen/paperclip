@@ -71,3 +71,12 @@ export function isCodexUnknownSessionError(stdout: string, stderr: string): bool
     haystack,
   );
 }
+
+export function isCodexBrokenResumeRuntimeError(stdout: string, stderr: string): boolean {
+  const haystack = `${stdout}\n${stderr}`
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+  return /failed to create unified exec process/i.test(haystack);
+}

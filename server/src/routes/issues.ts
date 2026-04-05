@@ -23,6 +23,7 @@ import {
   agentService,
   executionWorkspaceService,
   goalService,
+  goalLoopService,
   heartbeatService,
   issueApprovalService,
   issueService,
@@ -57,6 +58,7 @@ export function issueRoutes(db: Db, storage: StorageService) {
   const workProductsSvc = workProductService(db);
   const documentsSvc = documentService(db);
   const routinesSvc = routineService(db);
+  const goalLoop = goalLoopService(db);
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: MAX_ATTACHMENT_BYTES, files: 1 },
@@ -562,6 +564,10 @@ export function issueRoutes(db: Db, storage: StorageService) {
         revisionNumber: doc.latestRevisionNumber,
       },
     });
+    await goalLoop.syncGoalRunForIssue(issue.id, {
+      agentId: actor.agentId,
+      userId: actor.actorType === "user" ? actor.actorId : null,
+    });
 
     res.status(result.created ? 201 : 200).json(doc);
   });
@@ -629,6 +635,10 @@ export function issueRoutes(db: Db, storage: StorageService) {
           restoredFromRevisionNumber: result.restoredFromRevisionNumber,
         },
       });
+      await goalLoop.syncGoalRunForIssue(issue.id, {
+        agentId: actor.agentId,
+        userId: actor.actorType === "user" ? actor.actorId : null,
+      });
 
       res.json(result.document);
     },
@@ -672,6 +682,10 @@ export function issueRoutes(db: Db, storage: StorageService) {
         title: removed.title,
       },
     });
+    await goalLoop.syncGoalRunForIssue(issue.id, {
+      agentId: actor.agentId,
+      userId: actor.actorType === "user" ? actor.actorId : null,
+    });
     res.json({ ok: true });
   });
 
@@ -686,6 +700,8 @@ export function issueRoutes(db: Db, storage: StorageService) {
     const product = await workProductsSvc.createForIssue(issue.id, issue.companyId, {
       ...req.body,
       projectId: req.body.projectId ?? issue.projectId ?? null,
+      goalId: req.body.goalId ?? issue.goalId ?? null,
+      goalRunId: req.body.goalRunId ?? issue.goalRunId ?? null,
     });
     if (!product) {
       res.status(422).json({ error: "Invalid work product payload" });
@@ -702,6 +718,10 @@ export function issueRoutes(db: Db, storage: StorageService) {
       entityType: "issue",
       entityId: issue.id,
       details: { workProductId: product.id, type: product.type, provider: product.provider },
+    });
+    await goalLoop.syncGoalRunForIssue(issue.id, {
+      agentId: actor.agentId,
+      userId: actor.actorType === "user" ? actor.actorId : null,
     });
     res.status(201).json(product);
   });
@@ -731,6 +751,10 @@ export function issueRoutes(db: Db, storage: StorageService) {
       entityId: existing.issueId,
       details: { workProductId: product.id, changedKeys: Object.keys(req.body).sort() },
     });
+    await goalLoop.syncGoalRunForIssue(existing.issueId, {
+      agentId: actor.agentId,
+      userId: actor.actorType === "user" ? actor.actorId : null,
+    });
     res.json(product);
   });
 
@@ -758,6 +782,10 @@ export function issueRoutes(db: Db, storage: StorageService) {
       entityType: "issue",
       entityId: existing.issueId,
       details: { workProductId: removed.id, type: removed.type },
+    });
+    await goalLoop.syncGoalRunForIssue(existing.issueId, {
+      agentId: actor.agentId,
+      userId: actor.actorType === "user" ? actor.actorId : null,
     });
     res.json(removed);
   });
@@ -1075,6 +1103,9 @@ export function issueRoutes(db: Db, storage: StorageService) {
     if (commentBody && reopenRequested === true && isClosed && updateFields.status === undefined) {
       updateFields.status = "todo";
     }
+    if (updateFields.status !== undefined) {
+      await goalLoop.validateGoalRunIssueStatusChange(id, updateFields.status);
+    }
     let issue;
     try {
       issue = await svc.update(id, updateFields);
@@ -1107,6 +1138,10 @@ export function issueRoutes(db: Db, storage: StorageService) {
       return;
     }
     await routinesSvc.syncRunStatusForIssue(issue.id);
+    const goalRunSync = await goalLoop.syncGoalRunForIssue(issue.id, {
+      agentId: actor.agentId,
+      userId: actor.actorType === "user" ? actor.actorId : null,
+    });
 
     if (actor.runId) {
       await heartbeat.reportRunActivity(actor.runId).catch((err) =>
@@ -1147,6 +1182,24 @@ export function issueRoutes(db: Db, storage: StorageService) {
         _previous: hasFieldChanges ? previous : undefined,
       },
     });
+    if (goalRunSync && goalRunSync.nextIssue) {
+      await logActivity(db, {
+        companyId: issue.companyId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        agentId: actor.agentId,
+        runId: actor.runId,
+        action: "goal.phase_advanced",
+        entityType: "goal_run",
+        entityId: goalRunSync.run.id,
+        details: {
+          goalId: issue.goalId,
+          completedIssueId: issue.id,
+          nextIssueId: goalRunSync.nextIssue.id,
+          phase: goalRunSync.run.currentPhase,
+        },
+      });
+    }
 
     let comment = null;
     if (commentBody) {

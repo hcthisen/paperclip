@@ -4,6 +4,13 @@
 
 Paperclip is the control plane for autonomous AI companies. One instance of Paperclip can run multiple companies. A **company** is a first-order object.
 
+Paperclip now supports two execution models:
+
+- `goal_loop`: default for new companies and new users; optimized for concrete outcomes, shipped outputs, verification, measurement, and iteration
+- `classic`: the existing org-chart-first model; optimized for persistent agents, reporting structures, and long-lived coordination
+
+The system is still company-scoped, but the primary default runtime object for new execution is a goal, not an employee.
+
 ## Core Concepts
 
 ### Company
@@ -15,6 +22,49 @@ A company has:
 - **Org structure** — who reports to whom
 - **Revenue & expenses** — tracked at the company level
 - **Task hierarchy** — all work traces back to the company goal
+- **Context and recipes** — reusable operating context, SOPs, and execution templates for goal loops
+
+### Goal-Loop Mode
+
+Goal-loop mode is the default path for new users.
+
+The primary objects are:
+
+- company
+- context pack
+- goal
+- goal brief
+- recipe
+- goal run
+- output ledger
+- scoreboard
+- runbook
+
+Goal-loop mode is optimized for:
+
+- clear finish criteria
+- human-facing output
+- verification before success
+- measurement loops
+- minimum coordination overhead
+
+Operational rules for goal-loop mode:
+
+- heartbeats must wake goal runs or goal-scoped worker issues, not generic employee threads
+- if no actionable goal work exists, the wake should skip explicitly instead of resuming a stale generic session
+- external blockers must surface as `needs_human_decision` with a clear blocker summary
+- the primary operator action is to wake the goal run, not to manually poke an employee and hope it finds the right task
+
+### Classic Mode
+
+Classic mode keeps the current persistent-agent and org-chart model.
+
+Classic mode remains supported for:
+
+- persistent CEOs and managers
+- explicit reporting structures
+- long-lived role prompts
+- high-touch coordination across stable teams
 
 ### Employees & Agents
 
@@ -70,17 +120,27 @@ More detailed task structure TBD.
 
 ## User Flow (Dream Scenario)
 
-1. Open Paperclip, create a new company
-2. Define the company's goal: "Create the #1 AI note-taking app, $1M MRR in 3 months"
-3. Create the CEO
+### Goal-Loop Default
+
+1. Open Paperclip and create a new company
+2. Define or import the company context pack
+3. Create a goal
+4. Review or accept the generated Goal Brief
+5. Connect missing access
+6. Select a recipe
+7. Execute the first loop
+8. Inspect outputs, verification proof, scoreboard changes, and next actions
+9. If the loop is blocked, clear the blocker and wake the goal again from the goal surface
+
+### Classic Advanced Path
+
+1. Open Paperclip and create a new company
+2. Create the CEO
    - Choose an adapter (e.g., process adapter for Claude Code, HTTP adapter for OpenClaw)
    - Configure the adapter (agent identity, loop behavior, execution settings)
-   - CEO proposes strategic breakdown → board approves
-4. Define the CEO's reports: CTO, CMO, CFO, etc.
-   - Each gets their own adapter config and role definition
-5. Define their reports: engineers under CTO, marketers under CMO, etc.
-6. Set budgets, define initial strategic tasks
-7. Hit go — agents start their heartbeats and the company runs
+3. Define the CEO's reports and org chart
+4. Set budgets and strategic tasks
+5. Hit go — agents start their heartbeats and the company runs
 
 ## Guidelines
 
@@ -104,7 +164,7 @@ Paperclip’s core identity is a **control plane for autonomous AI companies**, 
 **Do**
 
 - Stay **board-level and company-level**. Users should manage goals, orgs, budgets, approvals, and outputs.
-- Make the first five minutes feel magical: install, answer a few questions, see a CEO do something real.
+- Make the first five minutes feel magical: install, answer a few questions, define a goal, and see a verified output happen.
 - Keep work anchored to **issues/comments/projects/goals**, even if the surface feels conversational.
 - Treat **agency / internal team / startup** as the same underlying abstraction with different templates and labels.
 - Make outputs first-class: files, docs, reports, previews, links, screenshots.
@@ -135,6 +195,9 @@ Paperclip’s core identity is a **control plane for autonomous AI companies**, 
 
 5. **Output-first**
    Work is not done until the user can see the result: file, document, preview link, screenshot, plan, or PR.
+
+9. **Verification-first for goal loops**
+   Goal-loop output-producing work is not successful until it is shipped, verified, recorded, and reflected in the scoreboard.
 
 6. **Local-first, cloud-ready**
    The mental model should not change between local solo use and shared/private or public/cloud deployment.

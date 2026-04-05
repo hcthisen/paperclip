@@ -1,3 +1,5 @@
+import type { GoalOutputType, OutputStatus } from "../constants.js";
+
 export type IssueWorkProductType =
   | "preview_url"
   | "runtime_service"
@@ -36,6 +38,8 @@ export interface IssueWorkProduct {
   companyId: string;
   projectId: string | null;
   issueId: string;
+  goalId?: string | null;
+  goalRunId?: string | null;
   executionWorkspaceId: string | null;
   runtimeServiceId: string | null;
   type: IssueWorkProductType;
@@ -44,10 +48,17 @@ export interface IssueWorkProduct {
   title: string;
   url: string | null;
   status: IssueWorkProductStatus | string;
+  outputType?: GoalOutputType | null;
+  outputStatus?: OutputStatus | null;
   reviewState: IssueWorkProductReviewState;
   isPrimary: boolean;
   healthStatus: "unknown" | "healthy" | "unhealthy";
   summary: string | null;
+  proofUrl?: string | null;
+  verificationRunId?: string | null;
+  verificationSummary?: string | null;
+  shippedAt?: Date | null;
+  verifiedAt?: Date | null;
   metadata: Record<string, unknown> | null;
   createdByRunId: string | null;
   createdAt: Date;

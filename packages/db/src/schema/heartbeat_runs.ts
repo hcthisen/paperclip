@@ -2,6 +2,8 @@ import { type AnyPgColumn, pgTable, uuid, text, timestamp, jsonb, index, integer
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { agentWakeupRequests } from "./agent_wakeup_requests.js";
+import { goals } from "./goals.js";
+import { goalRuns, recipeVersions } from "./goal_loop.js";
 
 export const heartbeatRuns = pgTable(
   "heartbeat_runs",
@@ -12,6 +14,10 @@ export const heartbeatRuns = pgTable(
     invocationSource: text("invocation_source").notNull().default("on_demand"),
     triggerDetail: text("trigger_detail"),
     status: text("status").notNull().default("queued"),
+    goalId: uuid("goal_id").references(() => goals.id, { onDelete: "set null" }),
+    goalRunId: uuid("goal_run_id").references(() => goalRuns.id, { onDelete: "set null" }),
+    goalRunPhase: text("goal_run_phase"),
+    recipeVersionId: uuid("recipe_version_id").references(() => recipeVersions.id, { onDelete: "set null" }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     error: text("error"),
@@ -47,5 +53,6 @@ export const heartbeatRuns = pgTable(
       table.agentId,
       table.startedAt,
     ),
+    companyGoalRunIdx: index("heartbeat_runs_company_goal_run_idx").on(table.companyId, table.goalRunId),
   }),
 );

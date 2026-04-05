@@ -73,6 +73,21 @@ export const queryKeys = {
   goals: {
     list: (companyId: string) => ["goals", companyId] as const,
     detail: (id: string) => ["goals", "detail", id] as const,
+    brief: (id: string) => ["goals", "detail", id, "brief"] as const,
+    runtime: (id: string) => ["goals", "detail", id, "runtime"] as const,
+    runs: (id: string) => ["goals", "detail", id, "runs"] as const,
+    outputs: (id: string) => ["goals", "detail", id, "outputs"] as const,
+    verifications: (id: string) => ["goals", "detail", id, "verifications"] as const,
+    scoreboard: (id: string) => ["goals", "detail", id, "scoreboard"] as const,
+    runbook: (id: string) => ["goals", "detail", id, "runbook"] as const,
+  },
+  goalLoop: {
+    contextPack: (companyId: string) => ["goal-loop", companyId, "context-pack"] as const,
+    health: (companyId: string) => ["goal-loop", companyId, "health"] as const,
+    recipes: (companyId: string) => ["goal-loop", companyId, "recipes"] as const,
+    outputVerifications: (outputId: string) => ["goal-loop", "output", outputId, "verifications"] as const,
+    resourceLeases: (companyId: string, goalId?: string) =>
+      ["goal-loop", companyId, "resource-leases", goalId ?? "__all__"] as const,
   },
   budgets: {
     overview: (companyId: string) => ["budgets", "overview", companyId] as const,

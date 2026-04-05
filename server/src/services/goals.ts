@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { goals } from "@paperclipai/db";
+import { companies, goals } from "@paperclipai/db";
 
 type GoalReader = Pick<Db, "select">;
 
@@ -55,12 +55,22 @@ export function goalService(db: Db) {
 
     getDefaultCompanyGoal: (companyId: string) => getDefaultCompanyGoal(db, companyId),
 
-    create: (companyId: string, data: Omit<typeof goals.$inferInsert, "companyId">) =>
-      db
+    create: async (companyId: string, data: Omit<typeof goals.$inferInsert, "companyId">) => {
+      const company = await db
+        .select({ defaultGoalMode: companies.defaultGoalMode })
+        .from(companies)
+        .where(eq(companies.id, companyId))
+        .then((rows) => rows[0] ?? null);
+      return db
         .insert(goals)
-        .values({ ...data, companyId })
+        .values({
+          ...data,
+          companyId,
+          mode: data.mode ?? company?.defaultGoalMode ?? "classic",
+        })
         .returning()
-        .then((rows) => rows[0]),
+        .then((rows) => rows[0]);
+    },
 
     update: (id: string, data: Partial<typeof goals.$inferInsert>) =>
       db

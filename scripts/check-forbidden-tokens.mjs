@@ -57,7 +57,7 @@ export function runForbiddenTokenCheck({
   error = console.error,
 }) {
   if (tokens.length === 0) {
-    log("  ℹ  Forbidden tokens list is empty — skipping check.");
+    log("  info  Forbidden tokens list is empty - skipping check.");
     return 0;
   }
 
@@ -80,7 +80,7 @@ export function runForbiddenTokenCheck({
         }
       }
     } catch {
-      // git grep returns exit code 1 when no matches — that's fine
+      // git grep returns exit code 1 when no matches - that's fine
     }
   }
 
@@ -89,7 +89,7 @@ export function runForbiddenTokenCheck({
     return 1;
   }
 
-  log("  ✓  No forbidden tokens found.");
+  log("  ok  No forbidden tokens found.");
   return 0;
 }
 

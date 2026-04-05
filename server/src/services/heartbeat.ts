@@ -10,6 +10,7 @@ import {
   agentRuntimeState,
   agentTaskSessions,
   agentWakeupRequests,
+  companies,
   heartbeatRunEvents,
   heartbeatRuns,
   issues,
@@ -42,6 +43,7 @@ import {
   sanitizeRuntimeServiceBaseEnv,
 } from "./workspace-runtime.js";
 import { issueService } from "./issues.js";
+import { goalLoopService } from "./goal-loop.js";
 import { executionWorkspaceService, mergeExecutionWorkspaceConfig } from "./execution-workspaces.js";
 import { workspaceOperationService } from "./workspace-operations.js";
 import {
@@ -289,6 +291,7 @@ interface WakeupOptions {
   source?: "timer" | "assignment" | "on_demand" | "automation";
   triggerDetail?: "manual" | "ping" | "callback" | "system";
   reason?: string | null;
+  routingMode?: "auto" | "goal_loop" | "classic";
   payload?: Record<string, unknown> | null;
   idempotencyKey?: string | null;
   requestedByActorType?: "user" | "agent" | "system";
@@ -391,6 +394,10 @@ async function resolveLedgerScopeForRun(
     return {
       issueId: null,
       projectId: contextProjectId,
+      goalId: run.goalId ?? null,
+      goalRunId: run.goalRunId ?? null,
+      goalRunPhase: run.goalRunPhase ?? null,
+      recipeVersionId: run.recipeVersionId ?? null,
     };
   }
 
@@ -398,6 +405,9 @@ async function resolveLedgerScopeForRun(
     .select({
       id: issues.id,
       projectId: issues.projectId,
+      goalId: issues.goalId,
+      goalRunId: issues.goalRunId,
+      goalRunPhase: issues.goalRunPhase,
     })
     .from(issues)
     .where(and(eq(issues.id, contextIssueId), eq(issues.companyId, companyId)))
@@ -406,6 +416,41 @@ async function resolveLedgerScopeForRun(
   return {
     issueId: issue?.id ?? null,
     projectId: issue?.projectId ?? contextProjectId,
+    goalId: issue?.goalId ?? run.goalId ?? null,
+    goalRunId: issue?.goalRunId ?? run.goalRunId ?? null,
+    goalRunPhase: issue?.goalRunPhase ?? run.goalRunPhase ?? null,
+    recipeVersionId: run.recipeVersionId ?? null,
+  };
+}
+
+async function resolveGoalLoopRunFieldsForContext(
+  db: Pick<Db, "select">,
+  companyId: string,
+  contextSnapshot: Record<string, unknown> | null | undefined,
+) {
+  const issueId = readNonEmptyString(contextSnapshot?.issueId);
+  if (!issueId) {
+    return {
+      goalId: null,
+      goalRunId: null,
+      goalRunPhase: null,
+    };
+  }
+
+  const issue = await db
+    .select({
+      goalId: issues.goalId,
+      goalRunId: issues.goalRunId,
+      goalRunPhase: issues.goalRunPhase,
+    })
+    .from(issues)
+    .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)))
+    .then((rows) => rows[0] ?? null);
+
+  return {
+    goalId: issue?.goalId ?? null,
+    goalRunId: issue?.goalRunId ?? null,
+    goalRunPhase: issue?.goalRunPhase ?? null,
   };
 }
 
@@ -691,6 +736,20 @@ function deriveCommentId(
   );
 }
 
+function deriveRoutingMode(
+  contextSnapshot: Record<string, unknown> | null | undefined,
+  payload: Record<string, unknown> | null | undefined,
+  fallback: WakeupOptions["routingMode"] | undefined,
+) {
+  const routingMode =
+    readNonEmptyString(contextSnapshot?.routingMode)
+    ?? readNonEmptyString(payload?.routingMode)
+    ?? fallback
+    ?? "auto";
+  if (routingMode === "goal_loop" || routingMode === "classic") return routingMode;
+  return "auto";
+}
+
 function enrichWakeContextSnapshot(input: {
   contextSnapshot: Record<string, unknown>;
   reason: string | null;
@@ -888,6 +947,7 @@ export function heartbeatService(db: Db) {
   const secretsSvc = secretService(db);
   const companySkills = companySkillService(db);
   const issuesSvc = issueService(db);
+  const goalLoop = goalLoopService(db);
   const executionWorkspacesSvc = executionWorkspaceService(db);
   const workspaceOperationsSvc = workspaceOperationService(db);
   const activeRunExecutions = new Set<string>();
@@ -1655,6 +1715,11 @@ export function heartbeatService(db: Db) {
         .returning()
         .then((rows) => rows[0]);
 
+      const retryGoalLoopFields = await resolveGoalLoopRunFieldsForContext(
+        tx,
+        run.companyId,
+        retryContextSnapshot,
+      );
       const retryRun = await tx
         .insert(heartbeatRuns)
         .values({
@@ -1666,6 +1731,9 @@ export function heartbeatService(db: Db) {
           wakeupRequestId: wakeupRequest.id,
           contextSnapshot: retryContextSnapshot,
           sessionIdBefore: sessionBefore,
+          goalId: retryGoalLoopFields.goalId,
+          goalRunId: retryGoalLoopFields.goalRunId,
+          goalRunPhase: retryGoalLoopFields.goalRunPhase,
           retryOfRunId: run.id,
           processLossRetryCount: (run.processLossRetryCount ?? 0) + 1,
           updatedAt: now,
@@ -1996,6 +2064,10 @@ export function heartbeatService(db: Db) {
         agentId: agent.id,
         issueId: ledgerScope.issueId,
         projectId: ledgerScope.projectId,
+        goalId: ledgerScope.goalId,
+        goalRunId: ledgerScope.goalRunId,
+        goalRunPhase: ledgerScope.goalRunPhase,
+        recipeVersionId: ledgerScope.recipeVersionId,
         provider,
         biller,
         billingType,
@@ -3053,6 +3125,11 @@ export function heartbeatService(db: Db) {
           readNonEmptyString(promotedContextSnapshot.resumeSessionDisplayId) ??
           await resolveSessionBeforeForWakeup(deferredAgent, promotedTaskKey);
         const now = new Date();
+        const promotedGoalLoopFields = await resolveGoalLoopRunFieldsForContext(
+          tx,
+          deferredAgent.companyId,
+          promotedContextSnapshot,
+        );
         const newRun = await tx
           .insert(heartbeatRuns)
           .values({
@@ -3064,6 +3141,9 @@ export function heartbeatService(db: Db) {
             wakeupRequestId: deferred.id,
             contextSnapshot: promotedContextSnapshot,
             sessionIdBefore: sessionBefore,
+            goalId: promotedGoalLoopFields.goalId,
+            goalRunId: promotedGoalLoopFields.goalRunId,
+            goalRunPhase: promotedGoalLoopFields.goalRunPhase,
           })
           .returning()
           .then((rows) => rows[0]);
@@ -3131,30 +3211,28 @@ export function heartbeatService(db: Db) {
       payload,
     });
     let issueId = readNonEmptyString(enrichedContextSnapshot.issueId) ?? issueIdFromPayload;
+    const routingMode = deriveRoutingMode(enrichedContextSnapshot, payload, opts.routingMode);
+    const requestedGoalRunId =
+      readNonEmptyString(enrichedContextSnapshot.goalRunId) ?? readNonEmptyString(payload?.goalRunId);
+    const requestedGoalRunPhase =
+      readNonEmptyString(enrichedContextSnapshot.goalRunPhase) ?? readNonEmptyString(payload?.goalRunPhase);
+    const explicitResumeFromRunId = readNonEmptyString(payload?.resumeFromRunId);
 
     const agent = await getAgent(agentId);
     if (!agent) throw notFound("Agent not found");
-    const explicitResumeSession = await resolveExplicitResumeSessionOverride(agent, payload, taskKey);
-    if (explicitResumeSession) {
-      enrichedContextSnapshot.resumeFromRunId = explicitResumeSession.resumeFromRunId;
-      enrichedContextSnapshot.resumeSessionDisplayId = explicitResumeSession.sessionDisplayId;
-      enrichedContextSnapshot.resumeSessionParams = explicitResumeSession.sessionParams;
-      if (!readNonEmptyString(enrichedContextSnapshot.issueId) && explicitResumeSession.issueId) {
-        enrichedContextSnapshot.issueId = explicitResumeSession.issueId;
-      }
-      if (!readNonEmptyString(enrichedContextSnapshot.taskId) && explicitResumeSession.taskId) {
-        enrichedContextSnapshot.taskId = explicitResumeSession.taskId;
-      }
-      if (!readNonEmptyString(enrichedContextSnapshot.taskKey) && explicitResumeSession.taskKey) {
-        enrichedContextSnapshot.taskKey = explicitResumeSession.taskKey;
-      }
-      issueId = readNonEmptyString(enrichedContextSnapshot.issueId) ?? issueId;
-    }
-    const effectiveTaskKey = readNonEmptyString(enrichedContextSnapshot.taskKey) ?? taskKey;
-    const sessionBefore =
-      explicitResumeSession?.sessionDisplayId ??
-      await resolveSessionBeforeForWakeup(agent, effectiveTaskKey);
-
+    const companyDefaultGoalMode = await db
+      .select({ defaultGoalMode: companies.defaultGoalMode })
+      .from(companies)
+      .where(eq(companies.id, agent.companyId))
+      .then((rows) => rows[0]?.defaultGoalMode ?? "classic");
+    const goalLoopWake =
+      routingMode === "goal_loop"
+      || (
+        routingMode !== "classic"
+        && companyDefaultGoalMode === "goal_loop"
+      )
+      || Boolean(requestedGoalRunId || requestedGoalRunPhase);
+    const scopedTaskKey = goalLoopWake && !issueId ? null : taskKey;
     const writeSkippedRequest = async (skipReason: string) => {
       await db.insert(agentWakeupRequests).values({
         companyId: agent.companyId,
@@ -3170,6 +3248,48 @@ export function heartbeatService(db: Db) {
         finishedAt: new Date(),
       });
     };
+
+    if (!issueId && !scopedTaskKey && !explicitResumeFromRunId && routingMode !== "classic") {
+      const routedTarget = requestedGoalRunId
+        ? await goalLoop.resolveGoalRunWakeTarget(requestedGoalRunId, {
+          preferredAgentId: agent.id,
+        })
+        : await goalLoop.resolveGoalLoopWakeTargetForAgent(agent.id);
+      if (routedTarget?.issueId && routedTarget.agentId === agent.id) {
+        enrichedContextSnapshot.issueId = routedTarget.issueId;
+        enrichedContextSnapshot.taskId = routedTarget.issueId;
+        enrichedContextSnapshot.taskKey = routedTarget.issueId;
+        enrichedContextSnapshot.goalRunId = routedTarget.goalRunId;
+        enrichedContextSnapshot.goalRunPhase = routedTarget.goalRunPhase;
+        enrichedContextSnapshot.routingMode = "goal_loop";
+        issueId = routedTarget.issueId;
+      } else if (goalLoopWake || source !== "assignment") {
+        await writeSkippedRequest("no_actionable_goal_work");
+        return null;
+      }
+    }
+
+    const routedTaskKey = readNonEmptyString(enrichedContextSnapshot.taskKey) ?? scopedTaskKey;
+    const explicitResumeSession = await resolveExplicitResumeSessionOverride(agent, payload, routedTaskKey);
+    if (explicitResumeSession) {
+      enrichedContextSnapshot.resumeFromRunId = explicitResumeSession.resumeFromRunId;
+      enrichedContextSnapshot.resumeSessionDisplayId = explicitResumeSession.sessionDisplayId;
+      enrichedContextSnapshot.resumeSessionParams = explicitResumeSession.sessionParams;
+      if (!readNonEmptyString(enrichedContextSnapshot.issueId) && explicitResumeSession.issueId) {
+        enrichedContextSnapshot.issueId = explicitResumeSession.issueId;
+      }
+      if (!readNonEmptyString(enrichedContextSnapshot.taskId) && explicitResumeSession.taskId) {
+        enrichedContextSnapshot.taskId = explicitResumeSession.taskId;
+      }
+      if (!readNonEmptyString(enrichedContextSnapshot.taskKey) && explicitResumeSession.taskKey) {
+        enrichedContextSnapshot.taskKey = explicitResumeSession.taskKey;
+      }
+      issueId = readNonEmptyString(enrichedContextSnapshot.issueId) ?? issueId;
+    }
+    const effectiveTaskKey = readNonEmptyString(enrichedContextSnapshot.taskKey) ?? routedTaskKey;
+    const sessionBefore =
+      explicitResumeSession?.sessionDisplayId ??
+      await resolveSessionBeforeForWakeup(agent, effectiveTaskKey);
 
     let projectId = readNonEmptyString(enrichedContextSnapshot.projectId);
     if (!projectId && issueId) {
@@ -3453,6 +3573,7 @@ export function heartbeatService(db: Db) {
             wakeupRequestId: wakeupRequest.id,
             contextSnapshot: enrichedContextSnapshot,
             sessionIdBefore: sessionBefore,
+            ...(await resolveGoalLoopRunFieldsForContext(tx, agent.companyId, enrichedContextSnapshot)),
           })
           .returning()
           .then((rows) => rows[0]);
@@ -3578,6 +3699,7 @@ export function heartbeatService(db: Db) {
         wakeupRequestId: wakeupRequest.id,
         contextSnapshot: enrichedContextSnapshot,
         sessionIdBefore: sessionBefore,
+        ...(await resolveGoalLoopRunFieldsForContext(db, agent.companyId, enrichedContextSnapshot)),
       })
       .returning()
       .then((rows) => rows[0]);

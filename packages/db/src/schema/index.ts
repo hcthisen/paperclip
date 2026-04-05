@@ -24,6 +24,18 @@ export { workspaceOperations } from "./workspace_operations.js";
 export { workspaceRuntimeServices } from "./workspace_runtime_services.js";
 export { projectGoals } from "./project_goals.js";
 export { goals } from "./goals.js";
+export {
+  contextPacks,
+  recipes,
+  recipeVersions,
+  goalBriefs,
+  goalRuns,
+  verificationRuns,
+  goalScoreboards,
+  goalScoreboardSnapshots,
+  runbooks,
+  resourceLeases,
+} from "./goal_loop.js";
 export { issues } from "./issues.js";
 export { routines, routineTriggers, routineRuns } from "./routines.js";
 export { issueWorkProducts } from "./issue_work_products.js";

@@ -5,6 +5,7 @@ import { issues } from "./issues.js";
 import { projects } from "./projects.js";
 import { goals } from "./goals.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
+import { goalRuns, recipeVersions } from "./goal_loop.js";
 
 export const costEvents = pgTable(
   "cost_events",
@@ -15,7 +16,10 @@ export const costEvents = pgTable(
     issueId: uuid("issue_id").references(() => issues.id),
     projectId: uuid("project_id").references(() => projects.id),
     goalId: uuid("goal_id").references(() => goals.id),
+    goalRunId: uuid("goal_run_id").references(() => goalRuns.id, { onDelete: "set null" }),
+    goalRunPhase: text("goal_run_phase"),
     heartbeatRunId: uuid("heartbeat_run_id").references(() => heartbeatRuns.id),
+    recipeVersionId: uuid("recipe_version_id").references(() => recipeVersions.id, { onDelete: "set null" }),
     billingCode: text("billing_code"),
     provider: text("provider").notNull(),
     biller: text("biller").notNull().default("unknown"),
@@ -49,5 +53,6 @@ export const costEvents = pgTable(
       table.companyId,
       table.heartbeatRunId,
     ),
+    companyGoalRunIdx: index("cost_events_company_goal_run_idx").on(table.companyId, table.goalRunId),
   }),
 );

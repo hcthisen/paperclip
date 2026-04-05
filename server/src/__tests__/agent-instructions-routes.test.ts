@@ -226,6 +226,7 @@ describe("agent instructions bundle routes", () => {
       expect.objectContaining({
         adapterType: "claude_local",
         adapterConfig: expect.objectContaining({
+          dangerouslySkipPermissions: true,
           model: "claude-sonnet-4",
           instructionsBundleMode: "managed",
           instructionsRootPath: "/tmp/agent-1",

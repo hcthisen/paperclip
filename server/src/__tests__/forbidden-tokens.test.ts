@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-const {
-  resolveDynamicForbiddenTokens,
-  resolveForbiddenTokens,
-  runForbiddenTokenCheck,
-} = await import("../../../scripts/check-forbidden-tokens.mjs");
+async function loadForbiddenTokenModule() {
+  return import("../../../scripts/check-forbidden-tokens.mjs");
+}
 
 describe("forbidden token check", () => {
-  it("derives username tokens without relying on whoami", () => {
+  it("derives username tokens without relying on whoami", async () => {
+    const { resolveDynamicForbiddenTokens } = await loadForbiddenTokenModule();
     const tokens = resolveDynamicForbiddenTokens(
       { USER: "paperclip", LOGNAME: "paperclip", USERNAME: "pc" },
       {
@@ -18,7 +17,8 @@ describe("forbidden token check", () => {
     expect(tokens).toEqual(["paperclip", "pc"]);
   });
 
-  it("falls back cleanly when user resolution fails", () => {
+  it("falls back cleanly when user resolution fails", async () => {
+    const { resolveDynamicForbiddenTokens } = await loadForbiddenTokenModule();
     const tokens = resolveDynamicForbiddenTokens(
       {},
       {
@@ -32,6 +32,7 @@ describe("forbidden token check", () => {
   });
 
   it("merges dynamic and file-based forbidden tokens", async () => {
+    const { resolveForbiddenTokens } = await loadForbiddenTokenModule();
     const fs = await import("node:fs");
     const os = await import("node:os");
     const path = await import("node:path");
@@ -50,7 +51,8 @@ describe("forbidden token check", () => {
     }
   });
 
-  it("reports matches without leaking which token was searched", () => {
+  it("reports matches without leaking which token was searched", async () => {
+    const { runForbiddenTokenCheck } = await loadForbiddenTokenModule();
     const exec = vi
       .fn()
       .mockReturnValueOnce("server/file.ts:1:found\n")

@@ -451,4 +451,103 @@ describe("codex execute", () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  it("retries with a fresh session when a resumed codex session has a broken tool runtime", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-codex-execute-broken-resume-"));
+    const workspace = path.join(root, "workspace");
+    const commandPath = path.join(root, "codex");
+    const capturePath = path.join(root, "capture.jsonl");
+    await fs.mkdir(workspace, { recursive: true });
+
+    const script = `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const capturePath = process.env.PAPERCLIP_TEST_CAPTURE_PATH;
+if (capturePath) {
+  fs.appendFileSync(capturePath, JSON.stringify({ argv: args }) + "\\n", "utf8");
+}
+const resumeIndex = args.indexOf("resume");
+if (resumeIndex !== -1) {
+  process.stderr.write('2026-04-05T16:15:55.197262Z ERROR codex_core::tools::router: error=exec_command failed for \`/bin/bash -lc "printf ok\\\\n"\`: CreateProcess { message: "Rejected(\\"Failed to create unified exec process: No such file or directory (os error 2)\\")" }\\n');
+  console.log(JSON.stringify({ type: "thread.started", thread_id: "broken-session-1" }));
+  console.log(JSON.stringify({
+    type: "item.completed",
+    item: { type: "agent_message", text: "I am blocked because shell commands are unavailable." },
+  }));
+  console.log(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } }));
+  process.exit(0);
+}
+console.log(JSON.stringify({ type: "thread.started", thread_id: "fresh-session-1" }));
+console.log(JSON.stringify({
+  type: "item.completed",
+  item: { type: "agent_message", text: "hello from fresh session" },
+}));
+console.log(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 2, cached_input_tokens: 0, output_tokens: 3 } }));
+`;
+    await fs.writeFile(commandPath, script, "utf8");
+    await fs.chmod(commandPath, 0o755);
+
+    const previousHome = process.env.HOME;
+    process.env.HOME = root;
+
+    try {
+      const logs: LogEntry[] = [];
+      const result = await execute({
+        runId: "run-broken-resume",
+        agent: {
+          id: "agent-1",
+          companyId: "company-1",
+          name: "Codex Coder",
+          adapterType: "codex_local",
+          adapterConfig: {},
+        },
+        runtime: {
+          sessionId: "broken-session-1",
+          sessionParams: {
+            sessionId: "broken-session-1",
+            cwd: workspace,
+          },
+          sessionDisplayId: "broken-session-1",
+          taskKey: "issue-1",
+        },
+        config: {
+          command: commandPath,
+          cwd: workspace,
+          env: {
+            PAPERCLIP_TEST_CAPTURE_PATH: capturePath,
+          },
+          promptTemplate: "Follow the paperclip heartbeat.",
+        },
+        context: {},
+        authToken: "run-jwt-token",
+        onLog: async (stream, chunk) => {
+          logs.push({ stream, chunk });
+        },
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.errorMessage).toBeNull();
+      expect(result.summary).toBe("hello from fresh session");
+      expect(result.sessionId).toBe("fresh-session-1");
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          stream: "stdout",
+          chunk: expect.stringContaining('Codex resume session "broken-session-1" is unusable; retrying with a fresh session.'),
+        }),
+      );
+
+      const invocations = (await fs.readFile(capturePath, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { argv: string[] });
+      expect(invocations).toHaveLength(2);
+      expect(invocations[0]?.argv).toEqual(expect.arrayContaining(["resume", "broken-session-1", "-"]));
+      expect(invocations[1]?.argv).toEqual(expect.arrayContaining(["exec", "--json", "-"]));
+      expect(invocations[1]?.argv).not.toContain("resume");
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 });

@@ -1,4 +1,4 @@
-import type { BillingType } from "../constants.js";
+import type { BillingType, GoalRunPhase } from "../constants.js";
 
 export interface CostEvent {
   id: string;
@@ -7,7 +7,10 @@ export interface CostEvent {
   issueId: string | null;
   projectId: string | null;
   goalId: string | null;
+  goalRunId?: string | null;
+  goalRunPhase?: GoalRunPhase | null;
   heartbeatRunId: string | null;
+  recipeVersionId?: string | null;
   billingCode: string | null;
   provider: string;
   biller: string;

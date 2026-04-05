@@ -24,4 +24,12 @@ export interface DashboardSummary {
     pausedAgents: number;
     pausedProjects: number;
   };
+  goals: {
+    total: number;
+    active: number;
+    activeRuns: number;
+    outputsPendingVerification: number;
+    verifiedOutputs: number;
+    costPerVerifiedOutputCents: number | null;
+  };
 }

@@ -13,6 +13,7 @@ import {
 import { agents } from "./agents.js";
 import { projects } from "./projects.js";
 import { goals } from "./goals.js";
+import { goalRuns } from "./goal_loop.js";
 import { companies } from "./companies.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
 import { projectWorkspaces } from "./project_workspaces.js";
@@ -44,6 +45,8 @@ export const issues = pgTable(
     originKind: text("origin_kind").notNull().default("manual"),
     originId: text("origin_id"),
     originRunId: text("origin_run_id"),
+    goalRunId: uuid("goal_run_id").references(() => goalRuns.id, { onDelete: "set null" }),
+    goalRunPhase: text("goal_run_phase"),
     requestDepth: integer("request_depth").notNull().default(0),
     billingCode: text("billing_code"),
     assigneeAdapterOverrides: jsonb("assignee_adapter_overrides").$type<Record<string, unknown>>(),
@@ -72,6 +75,7 @@ export const issues = pgTable(
     ),
     parentIdx: index("issues_company_parent_idx").on(table.companyId, table.parentId),
     projectIdx: index("issues_company_project_idx").on(table.companyId, table.projectId),
+    goalRunIdx: index("issues_company_goal_run_idx").on(table.companyId, table.goalRunId),
     originIdx: index("issues_company_origin_idx").on(table.companyId, table.originKind, table.originId),
     projectWorkspaceIdx: index("issues_company_project_workspace_idx").on(table.companyId, table.projectWorkspaceId),
     executionWorkspaceIdx: index("issues_company_execution_workspace_idx").on(table.companyId, table.executionWorkspaceId),

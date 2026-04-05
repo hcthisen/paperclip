@@ -17,13 +17,25 @@ import {
   heartbeatRunEvents,
   costEvents,
   financeEvents,
+  documents,
   approvalComments,
   approvals,
   activityLog,
   companySecrets,
+  contextPacks,
+  documentRevisions,
+  goalBriefs,
+  goalRuns,
+  goalScoreboardSnapshots,
+  goalScoreboards,
   joinRequests,
   invites,
   principalPermissionGrants,
+  recipeVersions,
+  recipes,
+  resourceLeases,
+  runbooks,
+  verificationRuns,
   companyMemberships,
 } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
@@ -41,6 +53,7 @@ export function companyService(db: Db) {
     budgetMonthlyCents: companies.budgetMonthlyCents,
     spentMonthlyCents: companies.spentMonthlyCents,
     requireBoardApprovalForNewAgents: companies.requireBoardApprovalForNewAgents,
+    defaultGoalMode: companies.defaultGoalMode,
     brandColor: companies.brandColor,
     logoAssetId: companyLogos.assetId,
     createdAt: companies.createdAt,
@@ -263,6 +276,18 @@ export function companyService(db: Db) {
         await tx.delete(issueComments).where(eq(issueComments.companyId, id));
         await tx.delete(costEvents).where(eq(costEvents.companyId, id));
         await tx.delete(financeEvents).where(eq(financeEvents.companyId, id));
+        await tx.delete(resourceLeases).where(eq(resourceLeases.companyId, id));
+        await tx.delete(verificationRuns).where(eq(verificationRuns.companyId, id));
+        await tx.delete(goalScoreboardSnapshots).where(eq(goalScoreboardSnapshots.companyId, id));
+        await tx.delete(goalScoreboards).where(eq(goalScoreboards.companyId, id));
+        await tx.delete(goalRuns).where(eq(goalRuns.companyId, id));
+        await tx.delete(goalBriefs).where(eq(goalBriefs.companyId, id));
+        await tx.delete(recipeVersions).where(eq(recipeVersions.companyId, id));
+        await tx.delete(recipes).where(eq(recipes.companyId, id));
+        await tx.delete(contextPacks).where(eq(contextPacks.companyId, id));
+        await tx.delete(runbooks).where(eq(runbooks.companyId, id));
+        await tx.delete(documentRevisions).where(eq(documentRevisions.companyId, id));
+        await tx.delete(documents).where(eq(documents.companyId, id));
         await tx.delete(approvalComments).where(eq(approvalComments.companyId, id));
         await tx.delete(approvals).where(eq(approvals.companyId, id));
         await tx.delete(companySecrets).where(eq(companySecrets.companyId, id));

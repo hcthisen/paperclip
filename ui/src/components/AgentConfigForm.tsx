@@ -619,6 +619,11 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                         modelReasoningEffort: "",
                         variant: "",
                         mode: "",
+                        ...((t === "claude_local" || t === "opencode_local")
+                          ? {
+                              dangerouslySkipPermissions: true,
+                            }
+                          : {}),
                         ...(t === "codex_local"
                           ? {
                               dangerouslyBypassApprovalsAndSandbox:

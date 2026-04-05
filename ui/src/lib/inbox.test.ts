@@ -196,6 +196,14 @@ const dashboard: DashboardSummary = {
     pausedAgents: 0,
     pausedProjects: 0,
   },
+  goals: {
+    total: 0,
+    active: 0,
+    activeRuns: 0,
+    outputsPendingVerification: 0,
+    verifiedOutputs: 0,
+    costPerVerifiedOutputCents: null,
+  },
 };
 
 describe("inbox helpers", () => {

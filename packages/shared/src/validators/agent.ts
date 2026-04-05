@@ -105,6 +105,10 @@ export const wakeAgentSchema = z.object({
   source: z.enum(["timer", "assignment", "on_demand", "automation"]).optional().default("on_demand"),
   triggerDetail: z.enum(["manual", "ping", "callback", "system"]).optional(),
   reason: z.string().optional().nullable(),
+  issueId: z.string().uuid().optional().nullable(),
+  goalRunId: z.string().uuid().optional().nullable(),
+  goalRunPhase: z.enum(["direction", "production", "verification", "measurement"]).optional().nullable(),
+  routingMode: z.enum(["auto", "goal_loop", "classic"]).optional().default("auto"),
   payload: z.record(z.unknown()).optional().nullable(),
   idempotencyKey: z.string().optional().nullable(),
   forceFreshSession: z.preprocess(

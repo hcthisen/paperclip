@@ -1,6 +1,7 @@
 import type {
   AgentRole,
   AgentStatus,
+  GoalRunPhase,
   HeartbeatInvocationSource,
   HeartbeatRunStatus,
   WakeupTriggerDetail,
@@ -14,6 +15,10 @@ export interface HeartbeatRun {
   invocationSource: HeartbeatInvocationSource;
   triggerDetail: WakeupTriggerDetail | null;
   status: HeartbeatRunStatus;
+  goalId?: string | null;
+  goalRunId?: string | null;
+  goalRunPhase?: GoalRunPhase | null;
+  recipeVersionId?: string | null;
   startedAt: Date | null;
   finishedAt: Date | null;
   error: string | null;
