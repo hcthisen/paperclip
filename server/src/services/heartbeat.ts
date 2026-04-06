@@ -750,6 +750,39 @@ function deriveRoutingMode(
   return "auto";
 }
 
+export async function resolveAssignedActionableIssueForAgent(
+  database: Pick<Db, "select">,
+  input: { companyId: string; agentId: string },
+) {
+  return await database
+    .select({
+      issueId: issues.id,
+      goalId: issues.goalId,
+      goalRunId: issues.goalRunId,
+      goalRunPhase: issues.goalRunPhase,
+    })
+    .from(issues)
+    .where(
+      and(
+        eq(issues.companyId, input.companyId),
+        eq(issues.assigneeAgentId, input.agentId),
+        inArray(issues.status, ["in_progress", "todo"]),
+        sql`${issues.hiddenAt} is null`,
+      ),
+    )
+    .orderBy(
+      sql`case when ${issues.status} = 'in_progress' then 0 when ${issues.status} = 'todo' then 1 else 2 end`,
+      sql`case ${issues.priority}
+            when 'critical' then 0
+            when 'high' then 1
+            when 'medium' then 2
+            else 3
+          end`,
+      asc(issues.createdAt),
+    )
+    .then((rows) => rows[0] ?? null);
+}
+
 function enrichWakeContextSnapshot(input: {
   contextSnapshot: Record<string, unknown>;
   reason: string | null;
@@ -3255,6 +3288,13 @@ export function heartbeatService(db: Db) {
           preferredAgentId: agent.id,
         })
         : await goalLoop.resolveGoalLoopWakeTargetForAgent(agent.id);
+      const fallbackAssignedIssue =
+        !routedTarget?.issueId
+          ? await resolveAssignedActionableIssueForAgent(db, {
+            companyId: agent.companyId,
+            agentId: agent.id,
+          })
+          : null;
       if (routedTarget?.issueId && routedTarget.agentId === agent.id) {
         enrichedContextSnapshot.issueId = routedTarget.issueId;
         enrichedContextSnapshot.taskId = routedTarget.issueId;
@@ -3263,6 +3303,17 @@ export function heartbeatService(db: Db) {
         enrichedContextSnapshot.goalRunPhase = routedTarget.goalRunPhase;
         enrichedContextSnapshot.routingMode = "goal_loop";
         issueId = routedTarget.issueId;
+      } else if (fallbackAssignedIssue?.issueId) {
+        enrichedContextSnapshot.issueId = fallbackAssignedIssue.issueId;
+        enrichedContextSnapshot.taskId = fallbackAssignedIssue.issueId;
+        enrichedContextSnapshot.taskKey = fallbackAssignedIssue.issueId;
+        if (fallbackAssignedIssue.goalRunId) {
+          enrichedContextSnapshot.goalRunId = fallbackAssignedIssue.goalRunId;
+        }
+        if (fallbackAssignedIssue.goalRunPhase) {
+          enrichedContextSnapshot.goalRunPhase = fallbackAssignedIssue.goalRunPhase;
+        }
+        issueId = fallbackAssignedIssue.issueId;
       } else if (goalLoopWake || source !== "assignment") {
         await writeSkippedRequest("no_actionable_goal_work");
         return null;
